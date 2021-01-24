@@ -26,7 +26,7 @@ class AttributeBBoxHead(nn.Module):
                  num_classes=31, #
                  num_faces=3, #
                  num_colours=7, #
-                 num_motion=2, #
+                 num_motions=2, #
                  bbox_coder=dict(
                      type='DeltaXYWHBBoxCoder',
                      clip_border=True,
@@ -66,7 +66,7 @@ class AttributeBBoxHead(nn.Module):
         self.num_classes = num_classes
         self.num_faces = num_faces#
         self.num_colours = num_colours#
-        self.num_motion = num_motion#
+        self.num_motions = num_motions#
         self.reg_class_agnostic = reg_class_agnostic
         self.reg_decoded_bbox = reg_decoded_bbox
         self.fp16_enabled = False
@@ -94,7 +94,7 @@ class AttributeBBoxHead(nn.Module):
         if self.with_colour:#
             self.fc_colour = nn.Linear(in_channels, num_colours)#
         if self.with_motion:#
-            self.fc_motion = nn.Linear(in_channels, num_motion)#
+            self.fc_motion = nn.Linear(in_channels, num_motions)#
         self.debug_imgs = None
 
     def init_weights(self):
@@ -128,7 +128,8 @@ class AttributeBBoxHead(nn.Module):
         return cls_score, bbox_pred, face_score, colour_score, motion_score#
 
     def _get_target_single(self, pos_bboxes, neg_bboxes, pos_gt_bboxes,
-                           pos_gt_labels, cfg):
+                           pos_gt_labels, pos_gt_faces, pos_gt_colours,
+                           pos_gt_motions, cfg):
         num_pos = pos_bboxes.size(0)
         num_neg = neg_bboxes.size(0)
         num_samples = num_pos + num_neg
@@ -140,12 +141,30 @@ class AttributeBBoxHead(nn.Module):
                                      self.num_classes,
                                      dtype=torch.long)
         label_weights = pos_bboxes.new_zeros(num_samples)
+        faces = pos_bboxes.new_full((num_samples, ),
+                                     self.num_faces,
+                                     dtype=torch.long)#
+        face_weights = pos_bboxes.new_zeros(num_samples)#
+        colours = pos_bboxes.new_full((num_samples, ),
+                                     self.num_colours,
+                                     dtype=torch.long)#
+        colour_weights = pos_bboxes.new_zeros(num_samples)#
+        motions = pos_bboxes.new_full((num_samples, ),
+                                     self.num_motions,
+                                     dtype=torch.long)#
+        motion_weights = pos_bboxes.new_zeros(num_samples)#
         bbox_targets = pos_bboxes.new_zeros(num_samples, 4)
         bbox_weights = pos_bboxes.new_zeros(num_samples, 4)
         if num_pos > 0:
             labels[:num_pos] = pos_gt_labels
+            faces[:num_pos] = pos_gt_faces#
+            colours[:num_pos] = pos_gt_colours#
+            motions[:num_pos] = pos_gt_motions#
             pos_weight = 1.0 if cfg.pos_weight <= 0 else cfg.pos_weight
             label_weights[:num_pos] = pos_weight
+            face_weights[:num_pos] = pos_weight#
+            colour_weights[:num_pos] = pos_weight#
+            motion_weights[:num_pos] = pos_weight#
             if not self.reg_decoded_bbox:
                 pos_bbox_targets = self.bbox_coder.encode(
                     pos_bboxes, pos_gt_bboxes)
@@ -159,33 +178,51 @@ class AttributeBBoxHead(nn.Module):
             bbox_weights[:num_pos, :] = 1
         if num_neg > 0:
             label_weights[-num_neg:] = 1.0
+            face_weights[-num_neg:] = 1.0#
+            colour_weights[-num_neg:] = 1.0#
+            motion_weights[-num_neg:] = 1.0#
 
-        return labels, label_weights, bbox_targets, bbox_weights
+        return labels, label_weights, faces, face_weights, colours, colour_weights, motions, motion_weights, bbox_targets, bbox_weights#
 
     def get_targets(self,
                     sampling_results,
                     gt_bboxes,
                     gt_labels,
+                    gt_faces,#
+                    gt_colours,#
+                    gt_motions,#
                     rcnn_train_cfg,
                     concat=True):
         pos_bboxes_list = [res.pos_bboxes for res in sampling_results]
         neg_bboxes_list = [res.neg_bboxes for res in sampling_results]
         pos_gt_bboxes_list = [res.pos_gt_bboxes for res in sampling_results]
         pos_gt_labels_list = [res.pos_gt_labels for res in sampling_results]
-        labels, label_weights, bbox_targets, bbox_weights = multi_apply(
+        pos_gt_faces_list = [res.pos_gt_faces for res in sampling_results]#
+        pos_gt_colours_list = [res.pos_gt_colours for res in sampling_results]#
+        pos_gt_motions_list = [res.pos_gt_motions for res in sampling_results]#
+        labels, label_weights, faces, face_weights, colours, colour_weights, motions, motion_weights, bbox_targets, bbox_weights = multi_apply(
             self._get_target_single,
             pos_bboxes_list,
             neg_bboxes_list,
             pos_gt_bboxes_list,
             pos_gt_labels_list,
+            pos_gt_faces_list,#
+            pos_gt_colours_list,#
+            pos_gt_motions_list,#
             cfg=rcnn_train_cfg)
 
         if concat:
             labels = torch.cat(labels, 0)
             label_weights = torch.cat(label_weights, 0)
+            faces = torch.cat(faces, 0)#
+            face_weights = torch.cat(face_weights, 0)#
+            colours = torch.cat(colours, 0)#
+            colour_weights = torch.cat(colour_weights, 0)#
+            motions = torch.cat(motions, 0)#
+            motion_weights = torch.cat(motion_weights, 0)#
             bbox_targets = torch.cat(bbox_targets, 0)
             bbox_weights = torch.cat(bbox_weights, 0)
-        return labels, label_weights, bbox_targets, bbox_weights
+            labels, label_weights, faces, face_weights, colours, colour_weights, motions, motion_weights, bbox_targets, bbox_weights#
 
     @force_fp32(apply_to=('cls_score', 'bbox_pred'))
     def loss(self,
