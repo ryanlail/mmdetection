@@ -314,12 +314,15 @@ class AttributeBBoxHead(nn.Module):
             else:
                 losses['loss_bbox'] = bbox_pred[pos_inds].sum()
         return losses
-
+    
     @force_fp32(apply_to=('cls_score', 'bbox_pred'))
     def get_bboxes(self,
                    rois,
                    cls_score,
                    bbox_pred,
+                   #face_score,#
+                   #colour_score,#
+                   #motion_score,#
                    img_shape,
                    scale_factor,
                    rescale=False,
@@ -433,3 +436,31 @@ class AttributeBBoxHead(nn.Module):
 
         return bboxes_list
 
+    @force_fp32(apply_to=('bbox_pred', ))
+    def regress_by_class(self, rois, label, bbox_pred, img_meta):
+        """Regress the bbox for the predicted class. Used in Cascade R-CNN.
+        Args:
+            rois (Tensor): shape (n, 4) or (n, 5)
+            label (Tensor): shape (n, )
+            bbox_pred (Tensor): shape (n, 4*(#class)) or (n, 4)
+            img_meta (dict): Image meta info.
+        Returns:
+            Tensor: Regressed bboxes, the same shape as input rois.
+        """
+        assert rois.size(1) == 4 or rois.size(1) == 5, repr(rois.shape)
+
+        if not self.reg_class_agnostic:
+            label = label * 4
+            inds = torch.stack((label, label + 1, label + 2, label + 3), 1)
+            bbox_pred = torch.gather(bbox_pred, 1, inds)
+        assert bbox_pred.size(1) == 4
+
+        if rois.size(1) == 4:
+            new_rois = self.bbox_coder.decode(
+                rois, bbox_pred, max_shape=img_meta['img_shape'])
+        else:
+            bboxes = self.bbox_coder.decode(
+                rois[:, 1:], bbox_pred, max_shape=img_meta['img_shape'])
+            new_rois = torch.cat((rois[:, [0]], bboxes), dim=1)
+
+        return new_rois
