@@ -182,7 +182,7 @@ class AttributeBBoxHead(nn.Module):
             colour_weights[-num_neg:] = 1.0#
             motion_weights[-num_neg:] = 1.0#
 
-        return labels, label_weights, faces, face_weights, colours, colour_weights, motions, motion_weights, bbox_targets, bbox_weights#
+        return labels, label_weights, bbox_targets, bbox_weights, faces, face_weights, colours, colour_weights, motions, motion_weights#
 
     def get_targets(self,
                     sampling_results,
@@ -200,7 +200,7 @@ class AttributeBBoxHead(nn.Module):
         pos_gt_faces_list = [res.pos_gt_faces for res in sampling_results]#
         pos_gt_colours_list = [res.pos_gt_colours for res in sampling_results]#
         pos_gt_motions_list = [res.pos_gt_motions for res in sampling_results]#
-        labels, label_weights, faces, face_weights, colours, colour_weights, motions, motion_weights, bbox_targets, bbox_weights = multi_apply(
+        labels, label_weights, bbox_targets, bbox_weights, faces, face_weights, colours, colour_weights, motions, motion_weights = multi_apply(
             self._get_target_single,
             pos_bboxes_list,
             neg_bboxes_list,
@@ -222,17 +222,27 @@ class AttributeBBoxHead(nn.Module):
             motion_weights = torch.cat(motion_weights, 0)#
             bbox_targets = torch.cat(bbox_targets, 0)
             bbox_weights = torch.cat(bbox_weights, 0)
-            labels, label_weights, faces, face_weights, colours, colour_weights, motions, motion_weights, bbox_targets, bbox_weights#
+            
+        return labels, label_weights, bbox_targets, bbox_weights, faces, face_weights, colours, colour_weights, motions, motion_weights#
 
-    @force_fp32(apply_to=('cls_score', 'bbox_pred'))
+    @force_fp32(apply_to=('cls_score', 'bbox_pred', 'face_score', 'colour_score', 'motion_score'))
     def loss(self,
              cls_score,
              bbox_pred,
+             face_score,#
+             colour_score,#
+             motion_score,#
              rois,
              labels,
              label_weights,
              bbox_targets,
              bbox_weights,
+             faces,#
+             face_weights,#
+             colours,#
+             colour_weights,#
+             motions,#
+             motion_weights,#
              reduction_override=None):
         losses = dict()
         if cls_score is not None:
@@ -245,6 +255,36 @@ class AttributeBBoxHead(nn.Module):
                     avg_factor=avg_factor,
                     reduction_override=reduction_override)
                 losses['acc'] = accuracy(cls_score, labels)
+        if face_score is not None:
+            avg_factor = max(torch.sum(face_weights > 0).float().item(), 1.)
+            if face_score.numel() > 0:
+                losses['loss_face'] = self.loss_face(
+                    face_score,
+                    faces,
+                    face_weights,
+                    avg_factor=avg_factor,
+                    reduction_override=reduction_override)
+                #losses['acc'] = accuracy(face_score, faces)
+        if colour_score is not None:
+            avg_factor = max(torch.sum(colour_weights > 0).float().item(), 1.)
+            if colour_score.numel() > 0:
+                losses['colour_face'] = self.loss_colour(
+                    colour_score,
+                    colours,
+                    colour_weights,
+                    avg_factor=avg_factor,
+                    reduction_override=reduction_override)
+                #losses['acc'] = accuracy(face_score, faces)
+        if motion_score is not None:
+            avg_factor = max(torch.sum(motion_weights > 0).float().item(), 1.)
+            if motion_score.numel() > 0:
+                losses['loss_motion'] = self.loss_motion(
+                    motion_score,
+                    motions,
+                    motions_weights,
+                    avg_factor=avg_factor,
+                    reduction_override=reduction_override)
+                #losses['acc'] = accuracy(face_score, faces)
         if bbox_pred is not None:
             bg_class_ind = self.num_classes
             # 0~self.num_classes-1 are FG, self.num_classes is BG
