@@ -105,6 +105,15 @@ class AttributeBBoxHead(nn.Module):
         if self.with_reg:
             nn.init.normal_(self.fc_reg.weight, 0, 0.001)
             nn.init.constant_(self.fc_reg.bias, 0)
+        if self.with_face:#
+            nn.init.normal_(self.fc_face.weight, 0, 0.01)#
+            nn.init.constant_(self.fc_face.bias, 0)#
+        if self.with_colour:#
+            nn.init.normal_(self.fc_colour.weight, 0, 0.01)#
+            nn.init.constant_(self.fc_colour.bias, 0)#
+        if self.with_motion:#
+            nn.init.normal_(self.fc_motion.weight, 0, 0.01)#
+            nn.init.constant_(self.fc_motion.bias, 0)#
 
     @auto_fp16()
     def forward(self, x):
