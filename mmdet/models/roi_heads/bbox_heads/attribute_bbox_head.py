@@ -122,7 +122,10 @@ class AttributeBBoxHead(nn.Module):
         x = x.view(x.size(0), -1)
         cls_score = self.fc_cls(x) if self.with_cls else None
         bbox_pred = self.fc_reg(x) if self.with_reg else None
-        return cls_score, bbox_pred
+        face_score = self.fc_face(x) if self.with_face else None
+        colour_score = self.fc_colour(x) if self.with_colour else None
+        motion_score = self.fc_motion(x) if self.with_motion else None
+        return cls_score, bbox_pred, face_score, colour_score, motion_score
 
     def _get_target_single(self, pos_bboxes, neg_bboxes, pos_gt_bboxes,
                            pos_gt_labels, cfg):
