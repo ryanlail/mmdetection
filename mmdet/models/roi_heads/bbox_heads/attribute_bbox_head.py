@@ -4,9 +4,16 @@ import torch.nn.functional as F
 from mmcv.runner import auto_fp16, force_fp32
 from torch.nn.modules.utils import _pair
 
-from mmdet.core import build_bbox_coder, multi_apply, multiclass_nms
+from mmdet.core import build_bbox_coder, multi_apply
 from mmdet.models.builder import HEADS, build_loss
 from mmdet.models.losses import accuracy
+
+
+"""
+Here we bundle the extended boudning box head together with the modified helper
+functions required to handle the 5 output layers. Helper functions could be 
+relocated in refactoring.
+"""
 
 
 @HEADS.register_module()
@@ -314,15 +321,15 @@ class AttributeBBoxHead(nn.Module):
             else:
                 losses['loss_bbox'] = bbox_pred[pos_inds].sum()
         return losses
-    
+
     @force_fp32(apply_to=('cls_score', 'bbox_pred', 'face_score', 'colour_score', 'motion_score'))
     def get_bboxes(self,
                    rois,
                    cls_score,
                    bbox_pred,
-                   face_score,#
-                   colour_score,#
-                   motion_score,#
+                   face_score,
+                   colour_score,
+                   motion_score,
                    img_shape,
                    scale_factor,
                    rescale=False,
@@ -364,11 +371,13 @@ class AttributeBBoxHead(nn.Module):
             return bboxes, scores, face_scores, colour_scores, motion_scores
         else:
             det_bboxes, det_labels, det_faces, det_colours, det_motions = multiclass_nms(bboxes, scores,
+                                                    face_scores, colour_scores, motion_scores,
                                                     cfg.score_thr, cfg.nms,
                                                     cfg.max_per_img)
 
-            return det_bboxes, det_labels
+            return det_bboxes, det_labels, det_faces, det_colours, det_motions
 
+# TODO
     @force_fp32(apply_to=('bbox_preds', ))
     def refine_bboxes(self, rois, labels, bbox_preds, pos_is_gts, img_metas):
         """Refine bboxes during training.
@@ -448,6 +457,7 @@ class AttributeBBoxHead(nn.Module):
 
         return bboxes_list
 
+# TODO
     @force_fp32(apply_to=('bbox_pred', ))
     def regress_by_class(self, rois, label, bbox_pred, img_meta):
         """Regress the bbox for the predicted class. Used in Cascade R-CNN.
@@ -477,6 +487,11 @@ class AttributeBBoxHead(nn.Module):
 
         return new_rois
 
+#########################################################################
+# Helpers to move back to core/utils/mmcv
+
+
+# TODO
 def multiclass_nms(multi_bboxes,
                    multi_scores,
                    multi_faces,
@@ -487,7 +502,10 @@ def multiclass_nms(multi_bboxes,
                    max_num=-1,
                    score_factors=None,
                    return_inds=False):
-    """NMS for multi-class bboxes.
+    """
+    REWRITE FROM mmdet.core.post_processing
+
+    NMS for multi-class bboxes.
 
     Args:
         multi_bboxes (Tensor): shape (n, #class*4) or (n, 4)
