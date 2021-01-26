@@ -527,6 +527,11 @@ def multiclass_nms(multi_bboxes,
     """
     num_classes = multi_scores.size(1) - 1
     # exclude background category
+    
+    num_faces = multi_faces.size(1)
+    num_colours = multi_colours.size(1)
+    num_motions = multi_motions.size(1)
+
     if multi_bboxes.shape[1] > 4:
         bboxes = multi_bboxes.view(multi_scores.size(0), -1, 4)
     else:
@@ -534,6 +539,10 @@ def multiclass_nms(multi_bboxes,
             multi_scores.size(0), num_classes, 4)
 
     scores = multi_scores[:, :-1]
+
+    face_scores = multi_faces[:, :-1]
+    colour_scores = multi_colours[:, :-1]
+    motion_scores = multi_motions[:, :-1]
 
     labels = torch.arange(num_classes, dtype=torch.long)
     labels = labels.view(1, -1).expand_as(scores)
