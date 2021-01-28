@@ -547,9 +547,27 @@ def multiclass_nms(multi_bboxes,
     labels = torch.arange(num_classes, dtype=torch.long)
     labels = labels.view(1, -1).expand_as(scores)
 
+    face_labels = torch.arrange(num_faces, dtype=torch.long)
+    face_labels = face_labels.view(1, -1).expand_as(face_scores)
+
+    colour_labels = torch.arrange(num_colours, dtype=torch.long)
+    colour_labels = colour_labels.view(1, -1).expand_as(colour_scores)
+
+    motion_labels = torch.arrange(num_motions, dtype=torch.long)
+    motion_labels = motion_labels.view(1, -1).expand_as(motion_scores)
+
     bboxes = bboxes.reshape(-1, 4)
     scores = scores.reshape(-1)
     labels = labels.reshape(-1)
+
+    face_scores = face_scores.reshape(-1)
+    face_labels = face_labels.reshape(-1)
+
+    colour_scores = colour_scores.reshape(-1)
+    colour_labels = colour_labels.reshape(-1)
+
+    motion_scores = motion_scores.reshape(-1)
+    motion_labels = motion_labels.reshape(-1)
 
     # remove low scoring boxes
     valid_mask = scores > score_thr
@@ -563,6 +581,7 @@ def multiclass_nms(multi_bboxes,
         scores = scores * score_factors
     inds = valid_mask.nonzero(as_tuple=False).squeeze(1)
     bboxes, scores, labels = bboxes[inds], scores[inds], labels[inds]
+
     if inds.numel() == 0:
         if torch.onnx.is_in_onnx_export():
             raise RuntimeError('[ONNX Error] Can not record NMS '
@@ -582,4 +601,4 @@ def multiclass_nms(multi_bboxes,
     if return_inds:
         return dets, labels[keep], keep
     else:
-        return dets, labels[keep]
+        return dets, labels[keep], 
