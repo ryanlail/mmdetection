@@ -377,7 +377,7 @@ class AttributeBBoxHead(nn.Module):
 
             return det_bboxes, det_labels, det_faces, det_colours, det_motions
 
-# TODO
+# TODO - not sure if anything actually needs changing as just alters the bboxes based on class?
     @force_fp32(apply_to=('bbox_preds', ))
     def refine_bboxes(self, rois, labels, bbox_preds, pos_is_gts, img_metas):
         """Refine bboxes during training.
@@ -457,7 +457,7 @@ class AttributeBBoxHead(nn.Module):
 
         return bboxes_list
 
-# TODO
+# TODO - not needed to implement, not needed for faster r-cnn
     @force_fp32(apply_to=('bbox_pred', ))
     def regress_by_class(self, rois, label, bbox_pred, img_meta):
         """Regress the bbox for the predicted class. Used in Cascade R-CNN.
