@@ -491,7 +491,6 @@ class AttributeBBoxHead(nn.Module):
 # Helpers to move back to core/utils/mmcv
 
 
-# TODO
 def multiclass_nms(multi_bboxes,
                    multi_scores,
                    multi_faces,
@@ -568,11 +567,14 @@ def multiclass_nms(multi_bboxes,
 
     motion_scores = motion_scores.reshape(-1)
     motion_labels = motion_labels.reshape(-1)
-
+    
+    # Performing NMS based on classes, then just add the predicted attributes
+    
     # remove low scoring boxes
     valid_mask = scores > score_thr
     # multiply score_factor after threshold to preserve more bboxes, improve
     # mAP by 1% for YOLOv3
+    # not used for us
     if score_factors is not None:
         # expand the shape to match original shape of score
         score_factors = score_factors.view(-1, 1).expand(
@@ -582,6 +584,10 @@ def multiclass_nms(multi_bboxes,
     inds = valid_mask.nonzero(as_tuple=False).squeeze(1)
     bboxes, scores, labels = bboxes[inds], scores[inds], labels[inds]
 
+    face_scores, face_labels = face_scores[inds], face_labels[inds]
+    colour_scores, colour_labels = colour_scores[inds], colour_labels[inds]
+    motion_scores, motion_labels = motion_scores[inds], motion_labels[inds]
+
     if inds.numel() == 0:
         if torch.onnx.is_in_onnx_export():
             raise RuntimeError('[ONNX Error] Can not record NMS '
@@ -589,8 +595,9 @@ def multiclass_nms(multi_bboxes,
         if return_inds:
             return bboxes, labels, inds
         else:
-            return bboxes, labels
-
+            return bboxes, labels, face_labels, colour_labels, motion_labels
+    
+    # Not sure if this needs to be changed, should just be able to use indexes
     # TODO: add size check before feed into batched_nms
     dets, keep = batched_nms(bboxes, scores, labels, nms_cfg)
 
@@ -598,7 +605,8 @@ def multiclass_nms(multi_bboxes,
         dets = dets[:max_num]
         keep = keep[:max_num]
 
+    # not used
     if return_inds:
         return dets, labels[keep], keep
     else:
-        return dets, labels[keep], 
+        return dets, labels[keep], face_labels[keep], colour_labels[keep], motion_labels[keep] 
